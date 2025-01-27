@@ -1,0 +1,121 @@
+---
+title: "Model Card: predicting employee attrition"
+date: last-modified
+execute:
+  echo: false
+format: html
+---
+
+```{r}
+#| include: false
+library(tidymodels)
+library(vetiver)
+library(pins)
+theme_set(theme_light())
+
+b <- board_connect()
+v <- vetiver_pin_read(b, "julia.silge/attrition-rf")
+v_meta <- pin_meta(b, "julia.silge/attrition-rf")
+```
+
+A [model card](https://doi.org/10.1145/3287560.3287596) provides brief, transparent, responsible reporting for a trained machine learning model.
+
+## Model details
+
+- Developed by Julia Silge for the Imaginary HR Department.
+- `r cli::pluralize("{v$description} using {ncol(v$prototype)} feature{?s}")`.
+- This model predicts how likely an employee is to leave their job at our Imaginary Company, based on their income, job satisfaction, department, and whether they work overtime.
+- Version `r v$metadata$version` of this model was published at `r v_meta$created`.
+- If you have questions about this model, please contact the good folks in the HR department.
+
+## Intended use
+
+- The primary intended use of this model is to provide a useful score for identifying employees at higher risk of attrition, for interventions targeted to groups.
+- The primary intended users of this model are HR leaders, to identify what kinds of employees need interventions in their work life.
+- Some use cases are out of scope for this model, such as providing these scores to individual managers to be used for compensation decisions.
+
+## Important factors
+
+- Specific factors important to the context of this model are the demographic distribution of our employees, and how employees of different backgrounds are distributed within the company.
+- In evaluating this model, we examined aspects such as how this model performs across employees in different departments and of different demographic characteristics.
+
+## Metrics
+
+- The metrics used to evaluate this model are accuracy and mean log loss.
+- These metrics are computed via the yardstick package from the tidymodels ecosystem.
+- We chose these metrics because they help us understand what proportion of our predictions are correct and how close our predictions are to the true values.
+
+## Training data & evaluation data
+
+- The training dataset for this model was 881 employees across all departments in our organization.
+- The training dataset for this model has the "prototype" or signature:
+
+```{r}
+glimpse(v$prototype)
+```
+
+- The evaluation dataset used in this model card is 589 of the same types of employees.
+- We chose this evaluation data as a random sample heldout from the original 1470 employees.
+
+## Quantitative analyses
+
+```{r}
+## compute predictions for your evaluation data
+attrition <- nanoparquet::read_parquet("attrition-eval.parquet")
+preds <- augment(v, attrition)
+```
+
+
+### Overall model performance
+
+```{r}
+inspect_metric_set <- metric_set(accuracy, mn_log_loss)
+inspect_metric_set(preds, truth = Attrition, estimate = .pred_class, .pred_No)
+```
+
+::: {.panel-tabset}
+
+### Model performance by gender
+
+```{r}
+preds |>
+  group_by(Gender) |>
+  inspect_metric_set(truth = Attrition, estimate = .pred_class, .pred_No)
+```
+
+### Model performance by education
+
+```{r}
+preds |>
+  group_by(Education) |>
+  inspect_metric_set(truth = Attrition, estimate = .pred_class, .pred_No)
+```
+
+:::
+
+### Visualize model performance
+
+```{r}
+preds |>
+  group_by(Department) |>
+  roc_curve(Attrition, .pred_No) |>
+  autoplot()
+```
+
+
+## Ethical considerations
+
+- We considered how this model may exacerbate existing inequality in our company, by performing better or worse for different groups.
+- We do not observe significant differences in model performance by gender or department.
+- We do observe differences in model performance by education, with worse performance for less educated employees. We identify this is as the most significant ethical challenge with using this model.
+
+## Caveats & recommendations
+
+- This model cannot be used to account for individual variation in likelihood to leave Imaginary Company.
+- We recommend that upper management keep in mind that scores from this model are not equally accurate for all employees.
+- This model is less useful in predicting attrition for employees with less education than those with more education.
+
+
+
+
+
